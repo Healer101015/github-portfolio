@@ -1,6 +1,5 @@
 import { useGitHubRepos } from './hooks/useGitHubRepos';
 import { ProjectCard } from './components/ProjectCard';
-import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Portfolio() {
   const { repos, loading, error } = useGitHubRepos('Healer101015');
@@ -26,9 +25,9 @@ export default function Portfolio() {
             {loading
               ? Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex flex-col space-y-3">
-                  <Skeleton className="h-48 w-full rounded-xl bg-slate-800" />
-                  <Skeleton className="h-4 w-[250px] bg-slate-800" />
-                  <Skeleton className="h-4 w-[200px] bg-slate-800" />
+                  <div className="animate-pulse h-48 w-full rounded-xl bg-slate-800" />
+                  <div className="animate-pulse h-4 w-[250px] rounded bg-slate-800" />
+                  <div className="animate-pulse h-4 w-[200px] rounded bg-slate-800" />
                 </div>
               ))
               : repos.map((repo) => (

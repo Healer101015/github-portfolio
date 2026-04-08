@@ -11,8 +11,9 @@ export interface Repo {
     thumbnail: string | null;
 }
 
-const CACHE_KEY = '@portfolio:github-repos';
-const CACHE_EXPIRATION_MS = 1000 * 60 * 60 * 24;
+// Mudei para v5 para destruir as imagens corrompidas do armazenamento do seu navegador
+const CACHE_KEY = '@portfolio:github-repos-starred-v5';
+const CACHE_SIG_KEY = '@portfolio:github-repos-sig-v5';
 
 export function useGitHubRepos(username: string) {
     const [repos, setRepos] = useState<Repo[]>([]);
@@ -24,23 +25,29 @@ export function useGitHubRepos(username: string) {
             try {
                 const cachedData = localStorage.getItem(CACHE_KEY);
                 if (cachedData) {
-                    const { data, timestamp } = JSON.parse(cachedData);
-                    if (Date.now() - timestamp < CACHE_EXPIRATION_MS) {
-                        setRepos(data);
-                        setLoading(false);
-                        return;
-                    }
+                    setRepos(JSON.parse(cachedData).data);
+                    setLoading(false);
                 }
 
                 const headers = { Accept: 'application/vnd.github.v3+json' };
-                const reposRes = await fetch(`https://api.github.com/users/${username}/repos?sort=updated&per_page=100`, { headers });
+                const reposRes = await fetch(`https://api.github.com/users/${username}/starred?per_page=100`, { headers });
 
                 if (!reposRes.ok) {
-                    throw new Error('Falha ao buscar repositórios.');
+                    throw new Error('Falha ao buscar repositórios favoritados.');
                 }
 
                 const reposData = await reposRes.json();
-                const validRepos = reposData.filter((repo: any) => repo.description && !repo.fork);
+
+                const validRepos = reposData.filter((repo: any) => {
+                    return repo.owner.login.toLowerCase() === username.toLowerCase() && !repo.fork;
+                });
+
+                const newRepoSignatures = validRepos.map((r: any) => `${r.id}-${r.updated_at}`).join(',');
+                const cachedSignatures = localStorage.getItem(CACHE_SIG_KEY);
+
+                if (cachedData && cachedSignatures === newRepoSignatures) {
+                    return;
+                }
 
                 const reposWithImages = await Promise.all(
                     validRepos.map(async (repo: any): Promise<Repo> => {
@@ -50,16 +57,21 @@ export function useGitHubRepos(username: string) {
                             if (readmeRes.ok) {
                                 const readmeData = await readmeRes.json();
                                 const decodedReadme = decodeBase64(readmeData.content);
-                                thumbnail = extractFirstImageFromMarkdown(decodedReadme);
+                                thumbnail = extractFirstImageFromMarkdown(
+                                    decodedReadme,
+                                    username,
+                                    repo.name,
+                                    repo.default_branch
+                                );
                             }
                         } catch (err) {
-                            // Ignora repos sem readme
+                            // Ignora repositórios sem readme
                         }
 
                         return {
                             id: repo.id,
                             name: repo.name,
-                            description: repo.description,
+                            description: repo.description || "Sem descrição disponível.",
                             html_url: repo.html_url,
                             updated_at: repo.updated_at,
                             homepage: repo.homepage,
@@ -69,10 +81,15 @@ export function useGitHubRepos(username: string) {
                 );
 
                 const sortedRepos = reposWithImages.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-                localStorage.setItem(CACHE_KEY, JSON.stringify({ data: sortedRepos, timestamp: Date.now() }));
+
+                localStorage.setItem(CACHE_KEY, JSON.stringify({ data: sortedRepos }));
+                localStorage.setItem(CACHE_SIG_KEY, newRepoSignatures);
                 setRepos(sortedRepos);
+
             } catch (err: any) {
-                setError(err.message);
+                if (repos.length === 0) {
+                    setError(err.message);
+                }
             } finally {
                 setLoading(false);
             }
