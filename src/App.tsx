@@ -3,7 +3,6 @@ import { ProjectCard } from './components/ProjectCard';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Portfolio() {
-  // Insira seu username aqui
   const { repos, loading, error } = useGitHubRepos('Healer101015');
 
   return (

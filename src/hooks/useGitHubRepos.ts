@@ -12,7 +12,7 @@ export interface Repo {
 }
 
 const CACHE_KEY = '@portfolio:github-repos';
-const CACHE_EXPIRATION_MS = 1000 * 60 * 60 * 24; // 24 horas
+const CACHE_EXPIRATION_MS = 1000 * 60 * 60 * 24;
 
 export function useGitHubRepos(username: string) {
     const [repos, setRepos] = useState<Repo[]>([]);
@@ -22,7 +22,6 @@ export function useGitHubRepos(username: string) {
     useEffect(() => {
         const fetchRepos = async () => {
             try {
-                // 1. Verifica o Cache
                 const cachedData = localStorage.getItem(CACHE_KEY);
                 if (cachedData) {
                     const { data, timestamp } = JSON.parse(cachedData);
@@ -33,24 +32,16 @@ export function useGitHubRepos(username: string) {
                     }
                 }
 
-                // DICA SENIOR: Para evitar o limite de 60 req/h, adicione um PAT (Personal Access Token)
-                // nos headers se for usar em produção intensamente: { Authorization: `token ${YOUR_TOKEN}` }
                 const headers = { Accept: 'application/vnd.github.v3+json' };
-
-                // 2. Busca Repositórios
                 const reposRes = await fetch(`https://api.github.com/users/${username}/repos?sort=updated&per_page=100`, { headers });
 
                 if (!reposRes.ok) {
-                    if (reposRes.status === 403) throw new Error('API Rate Limit excedido. Tente novamente mais tarde.');
                     throw new Error('Falha ao buscar repositórios.');
                 }
 
                 const reposData = await reposRes.json();
-
-                // Filtra apenas projetos com descrição
                 const validRepos = reposData.filter((repo: any) => repo.description && !repo.fork);
 
-                // 3. Busca o README e extrai a imagem para cada repositório em paralelo
                 const reposWithImages = await Promise.all(
                     validRepos.map(async (repo: any): Promise<Repo> => {
                         let thumbnail = null;
@@ -62,7 +53,7 @@ export function useGitHubRepos(username: string) {
                                 thumbnail = extractFirstImageFromMarkdown(decodedReadme);
                             }
                         } catch (err) {
-                            console.warn(`Sem README ou erro ao processar: ${repo.name}`);
+                            // Ignora repos sem readme
                         }
 
                         return {
@@ -77,12 +68,8 @@ export function useGitHubRepos(username: string) {
                     })
                 );
 
-                // Ordena por data de atualização (mais recentes primeiro)
                 const sortedRepos = reposWithImages.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-
-                // Salva no cache
                 localStorage.setItem(CACHE_KEY, JSON.stringify({ data: sortedRepos, timestamp: Date.now() }));
-
                 setRepos(sortedRepos);
             } catch (err: any) {
                 setError(err.message);
